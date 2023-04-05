@@ -2,6 +2,7 @@ package com.mc.cs345peoject;
 
 import jakarta.inject.Singleton;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.FormParam;
 import jakarta.ws.rs.GET;
@@ -100,10 +101,18 @@ public class MyResource {
             Class.forName(JDBC_DRIVER);
             conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
             PreparedStatement stmt = null;
-            String sql = "SELECT event_table.*, event_tag.event_tag "
-                    + "From event_table "
-                    + "left join event_tag on event_table.event_id = event_tag.event_id "
-                    + "where ((ACOS(SIN(? * PI() / 180) * SIN(event_lat * PI() / 180) + COS(? * PI() / 180) * COS(event_lat * PI() / 180) * COS((?- event_lng) * PI() / 180)) * 6371) <= ?)";
+//            String sql = "SELECT event_table.*, event_tag.event_tag "
+//                    + "From event_table "
+//                    + "left join event_tag on event_table.event_id = event_tag.event_id "
+//                    + "where ((ACOS(SIN(? * PI() / 180) * SIN(event_lat * PI() / 180) + COS(? * PI() / 180) * COS(event_lat * PI() / 180) * COS((?- event_lng) * PI() / 180)) * 6371) <= ?)";
+            String sql = "SELECT event_table.*, event_tag.event_tag, event_publish.publish_at, event_publish.exprie_at\n"
+                    + "FROM event_table\n"
+                    + "LEFT JOIN event_tag ON event_table.event_id = event_tag.event_id\n"
+                    + "LEFT JOIN event_publish ON event_table.event_id = event_publish.event_id\n"
+                    + "WHERE ((ACOS(SIN(? * PI() / 180) \n"
+                    + "* SIN(event_lat * PI() / 180) + COS(? * PI() / 180) \n"
+                    + "* COS(event_lat * PI() / 180) * COS((? - event_lng) \n"
+                    + "* PI() / 180)) * 6371) <= ?);";
             stmt = conn.prepareStatement(sql);
             stmt.setDouble(1, lat);
             stmt.setDouble(2, lat);
@@ -126,6 +135,8 @@ public class MyResource {
                 event.setEventLng(rs.getString("event_lng"));
                 event.setEventMsg(rs.getString("event_msg"));
                 event.setEventTag(rs.getString("event_tag"));
+                event.setEventPublishAt(rs.getString("publish_at"));
+                event.setEventExpireAt(rs.getString("exprie_at"));
                 returnEventList.add(event);
             }
             conn.close();
@@ -135,6 +146,93 @@ public class MyResource {
             Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
         } catch (SQLException ex) {
             Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
+
+    @GET
+    @Path("/event/getEventWithUserId/{userId}")
+    @Produces(MediaType.APPLICATION_JSON)
+    public synchronized Response getEventWithUserId(@PathParam("userId") String userIdStr) {
+        ArrayList<Event> returnEventList = new ArrayList<>();
+        try {
+            Class.forName(JDBC_DRIVER);
+            conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            PreparedStatement stmt = null;
+            String sql = "select * from event_table \n"
+                    + "LEFT JOIN event_tag ON event_table.event_id = event_tag.event_id\n"
+                    + "left join event_publish on event_table.event_id = event_publish.event_id\n"
+                    + "where user_id = ?";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, userIdStr);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.isBeforeFirst() == false) {
+                conn.close();
+                rs.close();
+                return Response.status(Response.Status.NO_CONTENT).build();
+            }
+            while (rs.next()) {
+                Event event = new Event();
+                event.setEventId(rs.getInt("event_id"));
+                event.setEventName(rs.getString("event_name"));
+                event.setEventAuth(rs.getString("event_auth"));
+                event.setEventTime(rs.getString("event_time"));
+                event.setEventDesc(rs.getString("event_desc"));
+                event.setEventLat(rs.getString("event_lat"));
+                event.setEventLng(rs.getString("event_lng"));
+                event.setEventMsg(rs.getString("event_msg"));
+                event.setEventTag(rs.getString("event_tag"));
+                event.setEventPublishAt(rs.getString("publish_at"));
+                event.setEventExpireAt(rs.getString("exprie_at"));
+                returnEventList.add(event);
+            }
+            return Response.status(Response.Status.OK).entity(returnEventList).build();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
+    }
+
+    @DELETE
+    @Path("/event/deleteEventWithId/{userId}/{eventId}")
+    public synchronized Response deleteEventWithId(@PathParam("userId") String userIdStr,
+            @PathParam("eventId") String eventIdStr) {
+        try {
+            Class.forName(JDBC_DRIVER);
+            conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+
+            //先确定用户是否拥有该event
+            String sql = "select * from event_publish where user_id = ? and event_id = ?;";
+            PreparedStatement stmt = null;
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, userIdStr);
+            stmt.setString(2, eventIdStr);
+            ResultSet rs = stmt.executeQuery();
+            //如果返回数据为空，说明用户未拥有该event，返回204 NO_CONTENT代码
+            if (rs.isBeforeFirst() == false) {
+                conn.close();
+                rs.close();
+                return Response.status(Response.Status.NO_CONTENT).build();
+            }
+            //往下说明用户拥有该event，执行删除操作
+            sql = "DELETE FROM event_table WHERE event_id = ? LIMIT 1;";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, eventIdStr);
+            stmt.executeUpdate();
+            stmt.execute();
+            sql = "DELETE FROM event_publish WHERE event_id = ? LIMIT 1;";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, eventIdStr);
+            stmt.executeUpdate();
+            sql = "DELETE FROM event_tag WHERE event_id = ? LIMIT 1;";
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, eventIdStr);
+            stmt.executeUpdate();
+            conn.close();
+            rs.close();
+            return Response.status(Response.Status.OK).build();
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         return Response.status(Response.Status.INTERNAL_SERVER_ERROR).build();
     }
@@ -208,7 +306,7 @@ public class MyResource {
             // 2. 插入数据
             String sql = "insert into `event_table` \n"
                     + "(event_name, event_auth, event_time, event_desc, event_lat, event_lng, event_msg)\n"
-                    + "values (?, ?, ?, ?, ?, ?, ?);\n";
+                    + "values (?, ?, ?, ?, ?, ?, ?);\n";//这个可以有效避免SQL注入攻击
             stmt = conn.prepareStatement(sql);
             stmt.setString(1, eventName);
             stmt.setString(2, eventAuth);
@@ -272,6 +370,92 @@ public class MyResource {
             }
         }
 
+    }
+
+    /*
+    URL: http://127.0.0.1:8080/webapi/event_server/event/updateEvent
+    Header: Content-Type, application/x-www-form-urlencoded
+    body:eventName=Example+Event&eventAuth=Example+Auth&eventTime=2022-01-01
+    &eventDesc=Example+Description&eventLat=12.345&eventLng=67.890
+    &eventMsg=Example+Message&userUid=tiaugiausdhiau151uhasdad
+    &exprieDate=2021-12-22+19:31:10
+     */
+    @POST
+    @Path("/event/updateEvent")
+    @Consumes(MediaType.APPLICATION_FORM_URLENCODED)
+    public synchronized Response updateEvent(@FormParam("eventName") String eventName,
+            @FormParam("eventAuth") @DefaultValue("Anonymous") String eventAuth,
+            @FormParam("eventTime") String eventTime,
+            @FormParam("eventDesc") String eventDesc,
+            @FormParam("eventLat") String eventLat,
+            @FormParam("eventLng") String eventLng,
+            @FormParam("eventMsg") String eventMsg,
+            @FormParam("userUid") String userUid,
+            @FormParam("exprieDate") String exprieDate) {
+        try {
+
+            // 1. 连接到数据库
+            Class.forName(JDBC_DRIVER);
+            conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            PreparedStatement stmt = null;
+
+            // 2. 插入数据
+            String sql = "insert into `event_table` \n"
+                    + "(event_name, event_auth, event_time, event_desc, event_lat, event_lng, event_msg)\n"
+                    + "values (?, ?, ?, ?, ?, ?, ?);\n";//这个可以有效避免SQL注入攻击
+            stmt = conn.prepareStatement(sql);
+            stmt.setString(1, eventName);
+            stmt.setString(2, eventAuth);
+            stmt.setString(3, eventTime);
+            stmt.setString(4, eventDesc);
+            stmt.setString(5, eventLat);
+            stmt.setString(6, eventLng);
+            stmt.setString(7, eventMsg);
+            //int rowsInserted = stmt.executeUpdate();
+
+            if (stmt.executeUpdate() != 0) {
+                sql = "select event_id from event_table where event_name = ? \n"
+                        + "and event_auth = ?\n"
+                        + "and event_time = ?";
+                stmt = conn.prepareStatement(sql);
+                stmt.setString(1, eventName);
+                stmt.setString(2, eventAuth);
+                stmt.setString(3, eventTime);
+                //ResultSet rs = conn.createStatement().executeQuery(sql);
+                ResultSet rs = stmt.executeQuery();
+                int returnEventId = 0;
+                while (rs.next()) {
+                    returnEventId = rs.getInt("event_id");
+                }
+                sql = "insert into `event_publish` (user_id, event_id, publish_at, start_date, exprie_at)\n"
+                        + "values(?, ?, ?, ?, ?);";
+                stmt = conn.prepareStatement(sql);
+                stmt.setString(1, userUid);
+                stmt.setInt(2, returnEventId);
+                LocalDateTime now = LocalDateTime.now();
+                String format = "yyyy-MM-dd HH:mm:ss";
+                String formattedDate = now.format(java.time.format.DateTimeFormatter.ofPattern(format));
+                stmt.setString(3, formattedDate);
+                stmt.setString(4, eventTime);
+                stmt.setString(5, exprieDate);
+                if (stmt.executeUpdate() != 0) {
+                    conn.close();
+                    return Response.status(Response.Status.OK).entity(returnEventId).build();//数据插入成功
+                } else {
+                    conn.close();
+                    return Response.status(Response.Status.SERVICE_UNAVAILABLE).build(); //插入数据失败
+                }
+            } else {
+                conn.close();
+                return Response.status(Response.Status.NOT_ACCEPTABLE).build(); //插入数据失败
+            }
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            return Response.status(Response.Status.NOT_IMPLEMENTED).build(); // 数据库驱动程序未找到
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();// 数据库操作失败
+        }
     }
 
     @POST

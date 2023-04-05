@@ -19,6 +19,8 @@ public class Event {
     public String eventLng;
     public String eventMsg;
     public String eventTag;
+    private String eventPublishAt;
+    private String eventExpireAt;
 
     public Event() {
     }
@@ -106,4 +108,32 @@ public class Event {
         this.eventTag = eventTag;
     }
 
+    /**
+     * @return the eventPublishAt
+     */
+    public String getEventPublishAt() {
+        return eventPublishAt;
+    }
+
+    /**
+     * @param eventPublishAt the eventPublishAt to set
+     */
+    public void setEventPublishAt(String eventPublishAt) {
+        this.eventPublishAt = eventPublishAt;
+    }
+
+    /**
+     * @return the eventExpireAt
+     */
+    public String getEventExpireAt() {
+        return eventExpireAt;
+    }
+
+    /**
+     * @param eventExpireAt the eventExpireAt to set
+     */
+    public void setEventExpireAt(String eventExpireAt) {
+        this.eventExpireAt = eventExpireAt;
+    }
+    
 }
