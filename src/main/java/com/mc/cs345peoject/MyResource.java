@@ -1,5 +1,6 @@
 package com.mc.cs345peoject;
 
+import com.google.firebase.messaging.FirebaseMessagingException;
 import jakarta.inject.Singleton;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
@@ -17,7 +18,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.sql.*;
 import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -33,6 +34,9 @@ public class MyResource {
     static final String DB_USER = "root";
     static final String DB_PASS = "12345678";
     Connection conn = null;
+    CloudMessage cloudMessage = new CloudMessage();
+    
+    private static List<String> userDeviceTokenList =  new ArrayList<>();
 
     /**
      * Method handling HTTP GET requests. The returned object will be sent to
@@ -344,6 +348,8 @@ public class MyResource {
                 stmt.setString(5, exprieDate);
                 if (stmt.executeUpdate() != 0) {
                     conn.close();
+                    //TODO 这里还要再优化一下，考虑单独独立出一个方法？
+                    cloudMessage.sendNotification(userDeviceTokenList.get(0), "test message", "test body");
                     return Response.status(Response.Status.OK).entity(returnEventId).build();//数据插入成功
                 } else {
                     conn.close();
@@ -359,6 +365,9 @@ public class MyResource {
         } catch (SQLException e) {
             e.printStackTrace();
             return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();// 数据库操作失败
+        } catch (FirebaseMessagingException e){
+            e.printStackTrace();
+            return Response.status(Response.Status.NOT_ACCEPTABLE).build(); //插入数据失败
         } finally {
             lock.writeLock().unlock();
             try {
@@ -512,6 +521,23 @@ public class MyResource {
             System.out.println("OK");
         }
         return Response.status(Response.Status.OK).build();
+    }
+    
+    @GET
+    @Path("/user/setUserToken/{userDeviceToken}")
+    static public synchronized Response setUserDeviceToken(
+            @PathParam("userDeviceToken") @DefaultValue("Any") String userDeviceToken) {
+        //检查token是否为空
+        if(userDeviceToken.length() > 2){
+            //服务器中是否已经含有用户token，有，返回200，无，添加后返回200
+            if(userDeviceTokenList.contains(userDeviceToken)){
+                return Response.status(Response.Status.OK).build();
+            } else {
+                userDeviceTokenList.add(userDeviceToken);
+            return Response.status(Response.Status.OK).build();
+            }
+        }
+        return Response.status(Response.Status.NOT_ACCEPTABLE).build();
     }
 
 }
