@@ -18,6 +18,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.sql.*;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -35,8 +36,8 @@ public class MyResource {
     static final String DB_PASS = "12345678";
     Connection conn = null;
     CloudMessage cloudMessage = new CloudMessage();
-    
-    private static List<String> userDeviceTokenList =  new ArrayList<>();
+
+    private static List<String> userDeviceTokenList = new ArrayList<>();
 
     /**
      * Method handling HTTP GET requests. The returned object will be sent to
@@ -348,8 +349,13 @@ public class MyResource {
                 stmt.setString(5, exprieDate);
                 if (stmt.executeUpdate() != 0) {
                     conn.close();
-                    //TODO 这里还要再优化一下，考虑单独独立出一个方法？
-                    cloudMessage.sendNotification(userDeviceTokenList.get(0), "test message", "test body");
+                    // TODO 这里还要再优化一下，考虑单独独立出一个方法？
+                    //当用户上传一个新方法的时候，看看有没有用户是关注这个tag的
+                    //如果有，给关注的用户推送消息
+//                    cloudMessage.sendNotification(userDeviceTokenList.get(0), "test message", "test body");
+//                    cloudMessage.checkUserSubscribe(sql, eventMsg, sql, sql);
+//                    cloudMessage.checkUserSubscribe(eventLat, eventLng, );
+                    
                     return Response.status(Response.Status.OK).entity(returnEventId).build();//数据插入成功
                 } else {
                     conn.close();
@@ -365,9 +371,6 @@ public class MyResource {
         } catch (SQLException e) {
             e.printStackTrace();
             return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();// 数据库操作失败
-        } catch (FirebaseMessagingException e){
-            e.printStackTrace();
-            return Response.status(Response.Status.NOT_ACCEPTABLE).build(); //插入数据失败
         } finally {
             lock.writeLock().unlock();
             try {
@@ -487,6 +490,7 @@ public class MyResource {
 
             if (stmt.executeUpdate() != 0) {
                 conn.close();
+                cloudMessage.checkUserSubscribe(eventId, eventTag);
                 return Response.status(Response.Status.OK).build();//数据插入成功
             } else {
                 conn.close();
@@ -522,19 +526,73 @@ public class MyResource {
         }
         return Response.status(Response.Status.OK).build();
     }
-    
+
     @GET
     @Path("/user/setUserToken/{userDeviceToken}")
     static public synchronized Response setUserDeviceToken(
             @PathParam("userDeviceToken") @DefaultValue("Any") String userDeviceToken) {
         //检查token是否为空
-        if(userDeviceToken.length() > 2){
+        if (userDeviceToken.length() > 2) {
             //服务器中是否已经含有用户token，有，返回200，无，添加后返回200
-            if(userDeviceTokenList.contains(userDeviceToken)){
+            if (userDeviceTokenList.contains(userDeviceToken)) {
                 return Response.status(Response.Status.OK).build();
             } else {
                 userDeviceTokenList.add(userDeviceToken);
-            return Response.status(Response.Status.OK).build();
+                return Response.status(Response.Status.OK).build();
+            }
+        }
+        return Response.status(Response.Status.NOT_ACCEPTABLE).build();
+    }
+
+    @POST
+    @Path("user/subscribe/tag/{userDeviceToken}/{city}/{tags}")
+    public synchronized Response setUserSubscribeTag(
+            @PathParam("userDeviceToken") String userDeviceToken,
+            @PathParam("city") String city,
+            @PathParam("tags") String tags) {
+        //数据非空，执行插入操作
+        if (!userDeviceToken.isEmpty() || !tags.isEmpty()) {
+            //使用正则表达式去除方框
+            tags = tags.replaceAll("[\\[\\]]", "");
+            List<String> tagList = Arrays.asList(tags.split(", "));
+            try {
+                Class.forName(JDBC_DRIVER);
+                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+                PreparedStatement stmt = null;
+
+                //先删除用户之前选择的tags
+                String deleteSql = "delete from event_subscribe "
+                        + "where user_device_token = ? LIMIT 100;";
+                stmt = conn.prepareStatement(deleteSql);
+                stmt.setString(1, userDeviceToken);
+                stmt.executeUpdate();
+
+                //再上传用户选择的tags
+                String sql = "insert into `event_subscribe` \n"
+                        + "(user_device_token, user_city, tag)\n"
+                        + "values(?, ?, ?);";
+                for (int i = 0; i < tagList.size(); i++) {
+                    stmt = conn.prepareStatement(sql);
+                    stmt.setString(1, userDeviceToken);
+                    stmt.setString(2, city);
+                    stmt.setString(3, tagList.get(i));
+                    stmt.executeUpdate();
+                }
+                return Response.status(Response.Status.OK).build();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+                return Response.status(Response.Status.NOT_IMPLEMENTED).build(); // 数据库驱动程序未找到
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();// 数据库操作失败
+            } finally {
+                try {
+                    if (conn != null) {
+                        conn.close();
+                    }
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
             }
         }
         return Response.status(Response.Status.NOT_ACCEPTABLE).build();
