@@ -355,7 +355,7 @@ public class MyResource {
 //                    cloudMessage.sendNotification(userDeviceTokenList.get(0), "test message", "test body");
 //                    cloudMessage.checkUserSubscribe(sql, eventMsg, sql, sql);
 //                    cloudMessage.checkUserSubscribe(eventLat, eventLng, );
-                    
+
                     return Response.status(Response.Status.OK).entity(returnEventId).build();//数据插入成功
                 } else {
                     conn.close();
@@ -596,6 +596,96 @@ public class MyResource {
             }
         }
         return Response.status(Response.Status.NOT_ACCEPTABLE).build();
+    }
+
+    @GET
+    @Path("/event/get/like/{eventId}")
+    public synchronized Response getEventLikeCount(@PathParam("eventId") String eventId) {
+        try {
+            int eventIdInt = Integer.parseInt(eventId);
+            Class.forName(JDBC_DRIVER);
+            conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            PreparedStatement stmt = null;
+
+            String sql = "select `like` from `event_like` where `event_id` = ?";
+            stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, eventIdInt);
+            ResultSet rs = stmt.executeQuery();
+            int like = 0;
+            while (rs.next()) {
+                like = rs.getInt("like");
+            }
+
+            return Response.status(Response.Status.OK).entity(like).build();
+        } catch (NumberFormatException e) {
+            // 如果eventId不是数字，则返回NotAcceptable 代码
+            return Response.status(Response.Status.NOT_ACCEPTABLE).build();
+        } catch (ClassNotFoundException ex) {
+            Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException ex) {
+            Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
+    }
+    
+    @POST
+    @Path("/event/post/like/{eventId}")
+    public synchronized Response updateEventLikeCount(@PathParam("eventId") String eventId) {
+        try {
+            int eventIdInt = Integer.parseInt(eventId);
+            Class.forName(JDBC_DRIVER);
+            conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            PreparedStatement stmt = null;
+
+            String sql = "UPDATE `event_like` SET `like` = `like` + 1 WHERE `event_id` = ? LIMIT 1;";
+            stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, eventIdInt);
+            if (stmt.executeUpdate() != 0) {
+                conn.close();
+                return Response.status(Response.Status.OK).build();//数据插入成功
+            } else {
+                conn.close();
+                return Response.status(Response.Status.NOT_ACCEPTABLE).build(); //插入数据失败
+            }
+        } catch (NumberFormatException e) {
+            // 如果eventId不是数字，则返回NotAcceptable 代码
+            return Response.status(Response.Status.NOT_ACCEPTABLE).build();
+        } catch (ClassNotFoundException ex) {
+            Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException ex) {
+            Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
+    }
+    
+    @POST
+    @Path("/event/post/unlike/{eventId}")
+    public synchronized Response updateEventUnlikeCount(@PathParam("eventId") String eventId) {
+        try {
+            int eventIdInt = Integer.parseInt(eventId);
+            Class.forName(JDBC_DRIVER);
+            conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+            PreparedStatement stmt = null;
+
+            String sql = "UPDATE `event_like` SET `like` = `like` - 1 WHERE `event_id` = ? LIMIT 1;";
+            stmt = conn.prepareStatement(sql);
+            stmt.setInt(1, eventIdInt);
+            if (stmt.executeUpdate() != 0) {
+                conn.close();
+                return Response.status(Response.Status.OK).build();//数据插入成功
+            } else {
+                conn.close();
+                return Response.status(Response.Status.NOT_ACCEPTABLE).build(); //插入数据失败
+            }
+        } catch (NumberFormatException e) {
+            // 如果eventId不是数字，则返回NotAcceptable 代码
+            return Response.status(Response.Status.NOT_ACCEPTABLE).build();
+        } catch (ClassNotFoundException ex) {
+            Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (SQLException ex) {
+            Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
     }
 
 }

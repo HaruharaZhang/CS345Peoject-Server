@@ -63,7 +63,7 @@ public class CloudMessage {
 
     }
 
-    public void sendNotification(String deviceToken, String title, String body) throws FirebaseMessagingException {
+    public void sendNotification(String deviceToken, String title, String body, String event_id) throws FirebaseMessagingException {
         Notification notification = Notification.builder()
                 .setTitle(title)
                 .setBody(body)
@@ -72,6 +72,7 @@ public class CloudMessage {
                 .setNotification(notification)
                 .putData("title", title)
                 .putData("body", body)
+                .putData("event_id", event_id)
                 .setToken(deviceToken)
                 .build();
         String response = FirebaseMessaging.getInstance().send(message);
@@ -116,7 +117,7 @@ public class CloudMessage {
                 rs.close();
             } else { //如果返回数据不为空，说明有用户订阅，发送通知。
                 while (rs.next()) {
-                    sendNotification(rs.getString("user_device_token"), title, body);
+                    sendNotification(rs.getString("user_device_token"), title, body, String.valueOf(eventId));
                 }
             }
 
@@ -142,7 +143,6 @@ public class CloudMessage {
 
             // 从响应中提取城市信息
             String city = extractCityFromResponse(responseStr);
-            System.out.println("The city is " + city);
             return city;
         }
     }
