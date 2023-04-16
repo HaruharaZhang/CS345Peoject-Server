@@ -60,10 +60,9 @@ public class CloudMessage {
         } catch (IOException e) {
             System.out.println(e);
         }
-
     }
 
-    public void sendNotification(String deviceToken, String title, String body, String event_id) throws FirebaseMessagingException {
+    public static void sendNotification(String deviceToken, String title, String body, String event_id) throws FirebaseMessagingException {
         Notification notification = Notification.builder()
                 .setTitle(title)
                 .setBody(body)
@@ -99,7 +98,7 @@ public class CloudMessage {
                 lat = eventRs.getString("event_lat");
                 lng = eventRs.getString("event_lng");
                 title = eventRs.getString("event_name");
-                body = eventRs.getString("event_desc");
+                body = "new_event";
             }
 
             String city = findCity(Double.valueOf(lat), Double.valueOf(lng));
@@ -115,7 +114,8 @@ public class CloudMessage {
             if (rs.isBeforeFirst() == false) {
                 conn.close();
                 rs.close();
-            } else { //如果返回数据不为空，说明有用户订阅，发送通知。
+            } else {
+                //如果返回数据不为空，说明有用户订阅，发送通知。
                 while (rs.next()) {
                     sendNotification(rs.getString("user_device_token"), title, body, String.valueOf(eventId));
                 }

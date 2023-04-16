@@ -4,6 +4,9 @@
  */
 package com.mc.cs345peoject;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+
 /**
  *
  * @author halu
@@ -134,6 +137,16 @@ public class Event {
      */
     public void setEventExpireAt(String eventExpireAt) {
         this.eventExpireAt = eventExpireAt;
+    }
+    
+    public boolean isEventExpire(Event event){
+        LocalDateTime time = LocalDateTime.parse(event.eventExpireAt, DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS"));
+        if(time.isBefore(LocalDateTime.now())){
+            //event已经过期了
+            return true;
+        }
+        //event还没有过期
+        return false;
     }
     
 }

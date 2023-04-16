@@ -37,8 +37,7 @@ public class MyResource {
     Connection conn = null;
     CloudMessage cloudMessage = new CloudMessage();
 
-    private static List<String> userDeviceTokenList = new ArrayList<>();
-
+    //private static List<String> userDeviceTokenList = new ArrayList<>();
     /**
      * Method handling HTTP GET requests. The returned object will be sent to
      * the client as "text/plain" media type.
@@ -300,7 +299,8 @@ public class MyResource {
             @FormParam("eventLng") String eventLng,
             @FormParam("eventMsg") String eventMsg,
             @FormParam("userUid") String userUid,
-            @FormParam("exprieDate") String exprieDate) {
+            @FormParam("exprieDate") String exprieDate,
+            @FormParam("userDeviceToken") String userDeviceToken) {
         try {
             lock.writeLock().lock();
             // 1. 连接到数据库
@@ -349,9 +349,10 @@ public class MyResource {
                 stmt.setString(5, exprieDate);
                 if (stmt.executeUpdate() != 0) {
                     conn.close();
-                    // TODO 这里还要再优化一下，考虑单独独立出一个方法？
-                    //当用户上传一个新方法的时候，看看有没有用户是关注这个tag的
-                    //如果有，给关注的用户推送消息
+
+                    //这里添加一个计时器，当用户event过期的时候发送通知
+                    EventExpireThread timer = new EventExpireThread();
+                    timer.runTimer(exprieDate, userDeviceToken, eventName, returnEventId);
 //                    cloudMessage.sendNotification(userDeviceTokenList.get(0), "test message", "test body");
 //                    cloudMessage.checkUserSubscribe(sql, eventMsg, sql, sql);
 //                    cloudMessage.checkUserSubscribe(eventLat, eventLng, );
@@ -527,18 +528,32 @@ public class MyResource {
         return Response.status(Response.Status.OK).build();
     }
 
-    @GET
-    @Path("/user/setUserToken/{userDeviceToken}")
-    static public synchronized Response setUserDeviceToken(
-            @PathParam("userDeviceToken") @DefaultValue("Any") String userDeviceToken) {
+    @POST
+    @Path("/user/setUserToken/{userId}/{userDeviceToken}")
+    public synchronized Response setUserDeviceToken(
+            @PathParam("userDeviceToken") String userDeviceToken,
+            @PathParam("userId") String userId) {
         //检查token是否为空
         if (userDeviceToken.length() > 2) {
-            //服务器中是否已经含有用户token，有，返回200，无，添加后返回200
-            if (userDeviceTokenList.contains(userDeviceToken)) {
-                return Response.status(Response.Status.OK).build();
-            } else {
-                userDeviceTokenList.add(userDeviceToken);
-                return Response.status(Response.Status.OK).build();
+            try {
+                Class.forName(JDBC_DRIVER);
+                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+                PreparedStatement stmt = null;
+
+                String sql = "INSERT INTO `user_token` (`user_id`, `user_token_key`) VALUES (?, ?)\n"
+                        + "ON DUPLICATE KEY UPDATE `user_token_key` = ?;";
+                stmt = conn.prepareStatement(sql);
+                stmt.setString(1, userId);
+                stmt.setString(2, userDeviceToken);
+                stmt.setString(3, userDeviceToken);
+                if (stmt.executeUpdate() != 0) {
+                    conn.close();
+                    return Response.status(Response.Status.OK).build();//数据插入成功
+                }
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
         return Response.status(Response.Status.NOT_ACCEPTABLE).build();
@@ -627,7 +642,7 @@ public class MyResource {
         }
         return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
     }
-    
+
     @POST
     @Path("/event/post/like/{eventId}")
     public synchronized Response updateEventLikeCount(@PathParam("eventId") String eventId) {
@@ -637,10 +652,24 @@ public class MyResource {
             conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
             PreparedStatement stmt = null;
 
-            String sql = "UPDATE `event_like` SET `like` = `like` + 1 WHERE `event_id` = ? LIMIT 1;";
+            String sql = "INSERT INTO `event_like` (`event_id`, `like`)\n"
+                    + "VALUES (?, 1)\n"
+                    + "ON DUPLICATE KEY UPDATE `like` = `like` + 1;";
             stmt = conn.prepareStatement(sql);
             stmt.setInt(1, eventIdInt);
             if (stmt.executeUpdate() != 0) {
+
+                sql = "SELECT `user_token_key`\n"
+                        + "FROM `user_token`\n"
+                        + "WHERE `user_id` = (SELECT `user_id` FROM `event_publish` WHERE `event_id` = ?);";
+                stmt = conn.prepareStatement(sql);
+                stmt.setInt(1, eventIdInt);
+                ResultSet rs = stmt.executeQuery();
+                while (rs.next()) {
+                    CloudMessage.sendNotification(rs.getString("user_token_key"), 
+                            "Like plus 1! Great!", "like_event", eventId);
+                }
+
                 conn.close();
                 return Response.status(Response.Status.OK).build();//数据插入成功
             } else {
@@ -654,10 +683,12 @@ public class MyResource {
             Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
         } catch (SQLException ex) {
             Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (FirebaseMessagingException ex) {
+            Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
         }
         return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
     }
-    
+
     @POST
     @Path("/event/post/unlike/{eventId}")
     public synchronized Response updateEventUnlikeCount(@PathParam("eventId") String eventId) {
