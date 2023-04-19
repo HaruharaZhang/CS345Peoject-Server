@@ -528,90 +528,6 @@ public class MyResource {
         return Response.status(Response.Status.OK).build();
     }
 
-    @POST
-    @Path("/user/setUserToken/{userId}/{userDeviceToken}")
-    public synchronized Response setUserDeviceToken(
-            @PathParam("userDeviceToken") String userDeviceToken,
-            @PathParam("userId") String userId) {
-        //检查token是否为空
-        if (userDeviceToken.length() > 2) {
-            try {
-                Class.forName(JDBC_DRIVER);
-                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
-                PreparedStatement stmt = null;
-
-                String sql = "INSERT INTO `user_token` (`user_id`, `user_token_key`) VALUES (?, ?)\n"
-                        + "ON DUPLICATE KEY UPDATE `user_token_key` = ?;";
-                stmt = conn.prepareStatement(sql);
-                stmt.setString(1, userId);
-                stmt.setString(2, userDeviceToken);
-                stmt.setString(3, userDeviceToken);
-                if (stmt.executeUpdate() != 0) {
-                    conn.close();
-                    return Response.status(Response.Status.OK).build();//数据插入成功
-                }
-            } catch (ClassNotFoundException ex) {
-                Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
-            } catch (SQLException ex) {
-                Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
-            }
-        }
-        return Response.status(Response.Status.NOT_ACCEPTABLE).build();
-    }
-
-    @POST
-    @Path("user/subscribe/tag/{userDeviceToken}/{city}/{tags}")
-    public synchronized Response setUserSubscribeTag(
-            @PathParam("userDeviceToken") String userDeviceToken,
-            @PathParam("city") String city,
-            @PathParam("tags") String tags) {
-        //数据非空，执行插入操作
-        if (!userDeviceToken.isEmpty() || !tags.isEmpty()) {
-            //使用正则表达式去除方框
-            tags = tags.replaceAll("[\\[\\]]", "");
-            List<String> tagList = Arrays.asList(tags.split(", "));
-            try {
-                Class.forName(JDBC_DRIVER);
-                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
-                PreparedStatement stmt = null;
-
-                //先删除用户之前选择的tags
-                String deleteSql = "delete from event_subscribe "
-                        + "where user_device_token = ? LIMIT 100;";
-                stmt = conn.prepareStatement(deleteSql);
-                stmt.setString(1, userDeviceToken);
-                stmt.executeUpdate();
-
-                //再上传用户选择的tags
-                String sql = "insert into `event_subscribe` \n"
-                        + "(user_device_token, user_city, tag)\n"
-                        + "values(?, ?, ?);";
-                for (int i = 0; i < tagList.size(); i++) {
-                    stmt = conn.prepareStatement(sql);
-                    stmt.setString(1, userDeviceToken);
-                    stmt.setString(2, city);
-                    stmt.setString(3, tagList.get(i));
-                    stmt.executeUpdate();
-                }
-                return Response.status(Response.Status.OK).build();
-            } catch (ClassNotFoundException e) {
-                e.printStackTrace();
-                return Response.status(Response.Status.NOT_IMPLEMENTED).build(); // 数据库驱动程序未找到
-            } catch (SQLException e) {
-                e.printStackTrace();
-                return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();// 数据库操作失败
-            } finally {
-                try {
-                    if (conn != null) {
-                        conn.close();
-                    }
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
-            }
-        }
-        return Response.status(Response.Status.NOT_ACCEPTABLE).build();
-    }
 
     @GET
     @Path("/event/get/like/{eventId}")
@@ -717,6 +633,127 @@ public class MyResource {
             Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
         }
         return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();
+    }
+    
+    @POST
+    @Path("/user/setUserToken/{userId}/{userDeviceToken}")
+    public synchronized Response setUserDeviceToken(
+            @PathParam("userDeviceToken") String userDeviceToken,
+            @PathParam("userId") String userId) {
+        //检查token是否为空
+        if (userDeviceToken.length() > 2) {
+            try {
+                Class.forName(JDBC_DRIVER);
+                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+                PreparedStatement stmt = null;
+
+                String sql = "INSERT INTO `user_token` (`user_id`, `user_token_key`) VALUES (?, ?)\n"
+                        + "ON DUPLICATE KEY UPDATE `user_token_key` = ?;";
+                stmt = conn.prepareStatement(sql);
+                stmt.setString(1, userId);
+                stmt.setString(2, userDeviceToken);
+                stmt.setString(3, userDeviceToken);
+                if (stmt.executeUpdate() != 0) {
+                    conn.close();
+                    return Response.status(Response.Status.OK).build();//数据插入成功
+                }
+            } catch (ClassNotFoundException ex) {
+                Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+            } catch (SQLException ex) {
+                Logger.getLogger(MyResource.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        }
+        return Response.status(Response.Status.NOT_ACCEPTABLE).build();
+    }
+
+    @POST
+    @Path("user/subscribe/tag/{userDeviceToken}/{city}/{tags}")
+    public synchronized Response setUserSubscribeTag(
+            @PathParam("userDeviceToken") String userDeviceToken,
+            @PathParam("city") String city,
+            @PathParam("tags") String tags) {
+        //数据非空，执行插入操作
+        if (!userDeviceToken.isEmpty() || !tags.isEmpty()) {
+            //使用正则表达式去除方框
+            tags = tags.replaceAll("[\\[\\]]", "");
+            List<String> tagList = Arrays.asList(tags.split(", "));
+            try {
+                Class.forName(JDBC_DRIVER);
+                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+                PreparedStatement stmt = null;
+
+                //先删除用户之前选择的tags
+                String deleteSql = "delete from event_subscribe "
+                        + "where user_device_token = ? LIMIT 100;";
+                stmt = conn.prepareStatement(deleteSql);
+                stmt.setString(1, userDeviceToken);
+                stmt.executeUpdate();
+
+                //再上传用户选择的tags
+                String sql = "insert into `event_subscribe` \n"
+                        + "(user_device_token, user_city, tag)\n"
+                        + "values(?, ?, ?);";
+                for (int i = 0; i < tagList.size(); i++) {
+                    stmt = conn.prepareStatement(sql);
+                    stmt.setString(1, userDeviceToken);
+                    stmt.setString(2, city);
+                    stmt.setString(3, tagList.get(i));
+                    stmt.executeUpdate();
+                }
+                return Response.status(Response.Status.OK).build();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+                return Response.status(Response.Status.NOT_IMPLEMENTED).build(); // 数据库驱动程序未找到
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();// 数据库操作失败
+            } finally {
+                try {
+                    if (conn != null) {
+                        conn.close();
+                    }
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return Response.status(Response.Status.NOT_ACCEPTABLE).build();
+    }
+    
+    @POST
+    @Path("user/name/change/{oldName}/{newName}")
+    public synchronized Response setUserSubscribeTag(
+            @PathParam("oldName") String oldName,
+            @PathParam("newName") String newName){
+        try {
+                Class.forName(JDBC_DRIVER);
+                conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS);
+                PreparedStatement stmt = null;
+
+                String sql = "UPDATE event_table SET `event_auth` = ? "
+                        + "WHERE `event_auth` = ? limit 10000;";
+                stmt = conn.prepareStatement(sql);
+                stmt.setString(1, newName);
+                stmt.setString(2, oldName);
+                stmt.executeUpdate();
+                
+                return Response.status(Response.Status.OK).build();
+            } catch (ClassNotFoundException e) {
+                e.printStackTrace();
+                return Response.status(Response.Status.NOT_IMPLEMENTED).build(); // 数据库驱动程序未找到
+            } catch (SQLException e) {
+                e.printStackTrace();
+                return Response.status(Response.Status.SERVICE_UNAVAILABLE).build();// 数据库操作失败
+            } finally {
+                try {
+                    if (conn != null) {
+                        conn.close();
+                    }
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        
     }
 
 }
