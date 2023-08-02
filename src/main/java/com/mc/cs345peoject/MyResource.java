@@ -113,10 +113,10 @@ public class MyResource {
                     + "FROM event_table\n"
                     + "LEFT JOIN event_tag ON event_table.event_id = event_tag.event_id\n"
                     + "LEFT JOIN event_publish ON event_table.event_id = event_publish.event_id\n"
-                    + "WHERE ((ACOS(SIN(? * PI() / 180) \n"
+                    + "WHERE (((ACOS(SIN(? * PI() / 180) \n"
                     + "* SIN(event_lat * PI() / 180) + COS(? * PI() / 180) \n"
                     + "* COS(event_lat * PI() / 180) * COS((? - event_lng) \n"
-                    + "* PI() / 180)) * 6371) <= ?);";
+                    + "* PI() / 180)) * 6371) <= ?) AND (NOW() < (event_publish.exprie_at + INTERVAL 2 HOUR)));";
             stmt = conn.prepareStatement(sql);
             stmt.setDouble(1, lat);
             stmt.setDouble(2, lat);
